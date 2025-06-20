@@ -24,7 +24,7 @@ def main():
 
     # 3. Get data
     print("Loading and preparing data...")
-    texts, labels = dataset_processor.get_texts_and_labels(split="train", n_examples=200)
+    texts, labels = dataset_processor.get_texts_and_labels(split="train", n_examples=2000)
 
     # 4. Extract activations from the model
     print(f"Extracting activations for layers: {TARGET_LAYERS}...")
