@@ -45,8 +45,13 @@ def main():
     print("Visualizing and saving results...")
     output_dir = "results"
     os.makedirs(output_dir, exist_ok=True)
-    sparse_framework.visualize_results(results, save_path=os.path.join(output_dir, "sparse_probing_results.png"))
-    sparse_framework.save_results(results, os.path.join(output_dir, "sparse_probing_results.json"))
+
+    # Save raw results
+    sparse_framework.save_results(results, os.path.join(output_dir, "probing_results.json"))
+
+    # Generate and save plots
+    sparse_framework.visualize_results(results, save_path=os.path.join(output_dir, "summary_plots.png"))
+    sparse_framework.visualize_advanced_analysis(results, save_path=os.path.join(output_dir, "advanced_plots.png"))
 
     # 7. Print summary
     print("\n=== Experiment Summary ===")
