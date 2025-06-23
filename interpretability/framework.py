@@ -154,19 +154,18 @@ class MechanisticInterpretabilityFramework:
         self.activations.clear()
         gc.collect()
 
+
     def forward_with_cache(self, input_ids: torch.Tensor,
-                          attention_mask: Optional[torch.Tensor] = None,
-                          max_length: int = 128) -> Dict[str, torch.Tensor]:
+                          attention_mask: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
         """
         Run forward pass and collect activations.
 
         Args:
-            input_ids: Tokenized input
-            attention_mask: Attention mask
-            max_length: Maximum sequence length to pad/truncate activations to
+            input_ids: Tokenized input, padded to a consistent length.
+            attention_mask: Attention mask.
 
         Returns:
-            Dictionary mapping hook names to activations
+            Dictionary mapping hook names to activations for the batch.
         """
         self.clear_activations()
 
@@ -179,36 +178,19 @@ class MechanisticInterpretabilityFramework:
             attention_mask = attention_mask.to(self.model.device)
 
             # Forward pass (activations are captured by hooks)
-            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            self.model(input_ids=input_ids, attention_mask=attention_mask)
 
-        # Convert list of tensors to single tensor for each hook, ensuring consistent sequence length
+        # The hook function already detaches and moves to CPU.
+        # We just need to stack the results.
         cached_activations = {}
-        for hook_name, activations in self.activations.items():
-            if activations:
-                # Stack activations and pad/truncate to max_length
-                stacked_activations = []
-                for activation in activations:
-                    # Ensure activation is [batch_size, seq_len, hidden_size]
-                    if len(activation.shape) == 2:
-                        activation = activation.unsqueeze(1)  # Add seq_len dimension if needed
-                    seq_len = activation.shape[1]
-                    if seq_len > max_length:
-                        # Truncate to max_length
-                        activation = activation[:, :max_length, :]
-                    elif seq_len < max_length:
-                        # Pad to max_length with zeros
-                        pad_size = max_length - seq_len
-                        activation = torch.nn.functional.pad(
-                            activation, (0, 0, 0, pad_size), mode='constant', value=0
-                        )
-                    stacked_activations.append(activation)
-                # Concatenate along batch dimension
-                cached_activations[hook_name] = torch.cat(stacked_activations, dim=0)
+        for hook_name, activations_list in self.activations.items():
+            if activations_list:
+                cached_activations[hook_name] = torch.cat(activations_list, dim=0)
 
         return cached_activations
 
     def extract_activations(self, texts: List[str], batch_size: int = 8,
-                           max_length: int = 128) -> Dict[str, torch.Tensor]:
+                           max_length: int = 128) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
         """
         Extract activations for a batch of texts.
 
@@ -218,9 +200,12 @@ class MechanisticInterpretabilityFramework:
             max_length: Maximum sequence length
 
         Returns:
-            Dictionary mapping hook names to activation tensors
+            A tuple containing:
+            - Dictionary mapping hook names to activation tensors
+            - Tensor of attention masks for all texts
         """
         all_activations = defaultdict(list)
+        all_masks = []
 
         for i in tqdm(range(0, len(texts), batch_size), desc="Extracting activations"):
             batch_texts = texts[i:i+batch_size]
@@ -228,11 +213,13 @@ class MechanisticInterpretabilityFramework:
             # Tokenize batch
             encoded = self.tokenizer(
                 batch_texts,
-                padding=True,
+                padding='max_length',
                 truncation=True,
                 max_length=max_length,
                 return_tensors="pt"
             )
+            
+            all_masks.append(encoded["attention_mask"])
 
             # Get activations for this batch
             batch_activations = self.forward_with_cache(
@@ -248,5 +235,7 @@ class MechanisticInterpretabilityFramework:
         final_activations = {}
         for hook_name, activation_list in all_activations.items():
             final_activations[hook_name] = torch.cat(activation_list, dim=0)
+            
+        final_attention_mask = torch.cat(all_masks, dim=0)
 
-        return final_activations
+        return final_activations, final_attention_mask

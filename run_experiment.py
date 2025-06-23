@@ -29,7 +29,7 @@ def main():
     # 4. Extract activations from the model
     print(f"Extracting activations for layers: {TARGET_LAYERS}...")
     framework.register_hooks(TARGET_LAYERS, components=["output"])
-    activations_dict = framework.extract_activations(
+    activations_dict, attention_mask = framework.extract_activations(
         texts, batch_size=8, max_length=64
     )
     framework.clear_hooks()
@@ -38,7 +38,7 @@ def main():
     print("Starting sparse probing experiment...")
     sparse_framework = SparseProbeFramework(PROBE_CONFIG)
     results = sparse_framework.run_sparse_probing_experiment(
-        activations_dict, labels, task_name="IOI_Classification"
+        activations_dict, labels, attention_mask, task_name="IOI_Classification"
     )
 
     # 6. Visualize and save results

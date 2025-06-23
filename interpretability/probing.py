@@ -224,13 +224,14 @@ class SparseProbeFramework:
         np.random.seed(config.random_seed)
 
     def prepare_data(self, activations: torch.Tensor, labels: List[str],
-                    layer_name: str) -> Tuple[torch.Tensor, torch.Tensor, LabelEncoder]:
+                    attention_mask: torch.Tensor, layer_name: str) -> Tuple[torch.Tensor, torch.Tensor, LabelEncoder]:
         """
         Prepare activation data and labels for probing.
 
         Args:
-            activations: Activation tensor [batch_size, seq_len, hidden_dim] or [batch_size, hidden_dim]
+            activations: Activation tensor [batch_size, seq_len, hidden_dim]
             labels: List of string labels
+            attention_mask: Attention mask tensor [batch_size, seq_len]
             layer_name: Name of the layer being probed
 
         Returns:
@@ -241,8 +242,13 @@ class SparseProbeFramework:
 
         # Handle different activation shapes
         if len(activations.shape) == 3:
-            # Average over sequence length for simplicity
-            activations = activations.mean(dim=1)
+            # Use the attention mask to find the index of the last non-padding token.
+            sequence_lengths = attention_mask.sum(dim=1)
+            last_token_indices = (sequence_lengths - 1).long()
+
+            # Gather the activations from the last token position for each item in the batch.
+            batch_indices = torch.arange(activations.size(0), device=activations.device)
+            activations = activations[batch_indices, last_token_indices, :]
 
         # Encode labels
         if layer_name not in self.label_encoders:
@@ -398,7 +404,8 @@ class SparseProbeFramework:
         return metrics
 
     def run_sparse_probing_experiment(self, activations_dict: Dict[str, torch.Tensor],
-                                    labels: List[str], task_name: str = "classification") -> Dict[str, Any]:
+                                    labels: List[str], attention_mask: torch.Tensor,
+                                    task_name: str = "classification") -> Dict[str, Any]:
         """
         Run complete sparse probing experiment across layers and sparsity levels.
 
@@ -425,7 +432,7 @@ class SparseProbeFramework:
             print(f"\nProcessing layer: {layer_name}")
 
             # Prepare data
-            X, y, label_encoder = self.prepare_data(activations, labels, layer_name)
+            X, y, label_encoder = self.prepare_data(activations, labels, attention_mask, layer_name)
 
             # Split into train/test
             X_train, X_test, y_train, y_test = train_test_split(
