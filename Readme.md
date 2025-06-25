@@ -43,7 +43,7 @@ The framework is designed to be modular and easy to understand.
     *   This is the core of the project. The `SparseProbeFramework` class orchestrates the experiment.
     *   For each layer's activations, it trains and evaluates three types of probes:
         *   **`Dense Probe`**: A standard `nn.Linear` layer. This is our baseline and uses all features.
-        *   **`k-Sparse Probe`**: A custom probe that identifies the `k` features with the highest importance scores and uses only them. This directly enforces a hard sparsity constraint.
+        *   **`k-Sparse Probe`**: This probe directly enforces a hard sparsity constraint. It learns a separate "importance score" for each input feature. During classification, it identifies the `k` features with the highest absolute importance scores and creates a mask to zero out everything else. The probe then makes its prediction using only this top-k subset.
         *   **`L0-Regularized Probe`**: A probe that uses L0 regularization. This technique adds a penalty to the loss function that encourages weights to become exactly zero, effectively turning features off. It *learns* which features to discard to achieve sparsity.
     *   The framework iterates through all specified layers and `k` values, trains the probes, evaluates their accuracy, and stores all results.
 
